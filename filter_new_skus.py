@@ -4,7 +4,7 @@ import os
 
 st.title("Shopify New SKU Filter")
 
-st.header("Upload Master Inventory CSV (Existing SKUs)")
+st.header("Upload Master Inventory CSV (Existing SKUs - Shopify Export)")
 master_file = st.file_uploader("Upload your current Shopify inventory CSV", type=["csv"], key="master")
 
 st.header("Upload Vendor Inventory CSV (New File)")
@@ -18,11 +18,16 @@ if master_file and uploaded_file:
     df_master.columns = df_master.columns.str.strip().str.lower()
     df_vendor.columns = df_vendor.columns.str.strip().str.lower()
 
-    # 🔹 Ensure "handle" column exists
-    if "handle" not in df_vendor.columns or "handle" not in df_master.columns:
-        st.error("Error: The uploaded files must contain a 'Handle' column. Please check your CSV format.")
+    # 🔹 Ensure "variant sku" exists in both files (required)
+    if "variant sku" not in df_vendor.columns or "variant sku" not in df_master.columns:
+        st.error("Error: Both files must contain a 'Variant SKU' column. Please check your CSV format.")
+
+    # 🔹 Ensure "handle" exists in the Vendor CSV (but NOT required in the Master CSV)
+    elif "handle" not in df_vendor.columns:
+        st.error("Error: The Vendor CSV must contain a 'Handle' column. Please check your CSV format.")
+    
     else:
-        # Identify new SKUs that are NOT in the master inventory
+        # Identify new SKUs by finding SKUs that are NOT in the master inventory
         new_sku_list = df_vendor.loc[~df_vendor["variant sku"].isin(df_master["variant sku"]), "variant sku"].unique()
 
         # Keep all rows related to new SKUs (ensures all images stay grouped)
