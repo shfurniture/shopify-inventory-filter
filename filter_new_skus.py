@@ -21,10 +21,10 @@ if master_file and uploaded_file:
 
     # Ensure necessary columns exist
     required_columns = ["variant sku", "title", "image src"]
-    for col in required_columns:
-        if col not in df_vendor.columns:
-            st.error(f"Error: The Vendor CSV must contain a '{col}' column. Please check your CSV format.")
-            st.stop()
+    missing_columns = [col for col in required_columns if col not in df_vendor.columns]
+    if missing_columns:
+        st.error(f"Error: The Vendor CSV is missing required columns: {', '.join(missing_columns)}. Please check your CSV format.")
+        st.stop()
 
     # Identify new SKUs that are NOT in the master inventory
     new_sku_list = df_vendor.loc[~df_vendor["variant sku"].isin(df_master["variant sku"]), "variant sku"].unique()
@@ -65,6 +65,11 @@ if master_file and uploaded_file:
 
     # Keep only columns that exist in both Shopify and the export
     available_columns = [col for col in shopify_columns if col.lower() in new_skus_df.columns]
+    missing_shopify_columns = [col for col in shopify_columns if col.lower() not in new_skus_df.columns]
+    
+    if missing_shopify_columns:
+        st.warning(f"Warning: The exported file is missing some expected Shopify columns: {', '.join(missing_shopify_columns)}")
+    
     new_skus_df = new_skus_df[available_columns]
 
     # Save the formatted output
