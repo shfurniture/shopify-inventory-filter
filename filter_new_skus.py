@@ -15,66 +15,58 @@ if master_file and uploaded_file:
     df_master = pd.read_csv(master_file)
     df_vendor = pd.read_csv(uploaded_file)
 
-    # 🔹 Normalize column names (strip spaces, fix case sensitivity)
+    # Normalize column names
     df_master.columns = df_master.columns.str.strip().str.lower()
     df_vendor.columns = df_vendor.columns.str.strip().str.lower()
 
-    # 🔹 Ensure necessary columns exist
-    if "variant sku" not in df_vendor.columns or "variant sku" not in df_master.columns:
-        st.error("Error: Both files must contain a 'Variant SKU' column. Please check your CSV format.")
-    elif "title" not in df_vendor.columns:
-        st.error("Error: The Vendor CSV must contain a 'Title' column. Please check your CSV format.")
-    else:
-        # Identify new SKUs that are NOT in the master inventory
-        new_sku_list = df_vendor.loc[~df_vendor["variant sku"].isin(df_master["variant sku"]), "variant sku"].unique()
+    # Ensure necessary columns exist
+    required_columns = ["variant sku", "title"]
+    for col in required_columns:
+        if col not in df_vendor.columns:
+            st.error(f"Error: The Vendor CSV must contain a '{col}' column. Please check your CSV format.")
+            st.stop()
 
-        # Keep all rows related to new SKUs
-        new_skus_df = df_vendor[df_vendor["variant sku"].isin(new_sku_list)].copy()
+    # Identify new SKUs that are NOT in the master inventory
+    new_sku_list = df_vendor.loc[~df_vendor["variant sku"].isin(df_master["variant sku"]), "variant sku"].unique()
+    new_skus_df = df_vendor[df_vendor["variant sku"].isin(new_sku_list)].copy()
 
-        # Create a dictionary for handles
-        handle_map = {}
+    # Generate unique handles for similar products
+    def generate_handle(name):
+        return name.lower().replace(" ", "-").replace("/", "-").replace("&", "and")
 
-        # Function to generate unique handles
-        def generate_handle(name):
-            return name.lower().replace(" ", "-").replace("/", "-").replace("&", "and")
+    unique_titles = list(new_skus_df["title"].unique())
+    grouped_titles = {}
+    for title in unique_titles:
+        similar = difflib.get_close_matches(title, unique_titles, cutoff=0.8)
+        key_title = similar[0] if similar else title
+        if key_title not in grouped_titles:
+            grouped_titles[key_title] = []
+        grouped_titles[key_title].append(title)
 
-        # Group similar product names
-        unique_titles = list(new_skus_df["title"].unique())
-        grouped_titles = {}
+    handle_map = {title: generate_handle(base_title) for base_title, similar_titles in grouped_titles.items() for title in similar_titles}
+    new_skus_df["handle"] = new_skus_df["title"].map(handle_map)
 
-        for title in unique_titles:
-            similar = difflib.get_close_matches(title, unique_titles, cutoff=0.8)
-            key_title = similar[0] if similar else title
-            if key_title not in grouped_titles:
-                grouped_titles[key_title] = []
-            grouped_titles[key_title].append(title)
+    # Format title and blank out variant rows where needed
+    first_occurrences = new_skus_df.groupby("handle").head(1).index
+    new_skus_df.loc[~new_skus_df.index.isin(first_occurrences), ["title", "body (html)", "vendor", "product category", "tags", "published"]] = ""
 
-        # Assign handles and merge similar listings
-        for base_title, similar_titles in grouped_titles.items():
-            handle = generate_handle(base_title)
-            for title in similar_titles:
-                handle_map[title] = handle
+    # Reorder columns to match Shopify's format
+    shopify_columns = [
+        "Handle", "Title", "Body (HTML)", "Vendor", "Product Category", "Type", "Tags", "Published", 
+        "Option1 Name", "Option1 Value", "Option2 Name", "Option2 Value", "Option3 Name", "Option3 Value", 
+        "Variant SKU", "Variant Grams", "Variant Inventory Tracker", "Variant Inventory Qty", 
+        "Variant Inventory Policy", "Variant Fulfillment Service", "Variant Price", "Variant Compare At Price", 
+        "Variant Requires Shipping", "Variant Taxable", "Variant Barcode", "Image Src", "Image Position", 
+        "Image Alt Text", "Gift Card", "SEO Title", "SEO Description", "Google Shopping / Google Product Category"
+    ]
 
-        # Apply generated handles
-        new_skus_df["handle"] = new_skus_df["title"].map(handle_map)
+    # Keep only columns that exist in both Shopify and the export
+    available_columns = [col for col in shopify_columns if col.lower() in new_skus_df.columns]
+    new_skus_df = new_skus_df[available_columns]
 
-        # Format Title (first row contains product title, others are blank)
-        new_skus_df["formatted_title"] = ""
-        first_occurrences = new_skus_df.groupby("handle").head(1).index
-        new_skus_df.loc[first_occurrences, "formatted_title"] = new_skus_df.loc[first_occurrences, "title"]
+    # Save the formatted output
+    new_skus_file = "new_skus_for_upload.csv"
+    new_skus_df.to_csv(new_skus_file, index=False)
 
-        # Set blank values for description, vendor, etc. for non-primary rows
-        cols_to_blank = ["body (html)", "vendor", "product category", "tags", "published"]
-        for col in cols_to_blank:
-            if col in new_skus_df.columns:
-                new_skus_df[col] = new_skus_df[col].where(new_skus_df.index.isin(first_occurrences), "")
-
-        # Rename formatted title back to "Title"
-        new_skus_df.rename(columns={"formatted_title": "title"}, inplace=True)
-
-        # Save the formatted output
-        new_skus_file = "new_skus_for_upload.csv"
-        new_skus_df.to_csv(new_skus_file, index=False)
-
-        st.success("New SKUs extracted successfully! Shopify format applied.")
-        st.download_button("Download New SKUs CSV", new_skus_df.to_csv(index=False), "new_skus_for_upload.csv", "text/csv")
+    st.success("New SKUs extracted successfully! Shopify format applied.")
+    st.download_button("Download New SKUs CSV", new_skus_df.to_csv(index=False), "new_skus_for_upload.csv", "text/csv")
