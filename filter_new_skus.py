@@ -11,29 +11,35 @@ def process_sku_file(shopify_file, vendor_file):
     vendor_df = pd.read_csv(vendor_file)
     
     # Standardize column names
-    column_mapping = {
-        "Variant SKU": "SKU",
-        "Title": "Product Title",
-        "Body (HTML)": "Description",
-        "Vendor": "Supplier",
-        "Product Category": "Category",
-        "Option1 Name": "Option Name",
-        "Option1 Value": "Option Value",
-        "Variant Price": "Price",
-        "Status": "Product Status"
+    column_mapping_vendor = {
+        "Title": "Title",
+        "Body HTML": "Body (HTML)",
+        "Variant SKU": "Variant SKU",
+        "Variant Price": "Variant Price",
+        "Status": "Status"
     }
-    shopify_df.rename(columns=column_mapping, inplace=True)
-    vendor_df.rename(columns=column_mapping, inplace=True)
+    
+    column_mapping_shopify = {
+        "Handle": "Handle",
+        "Title": "Title",
+        "Body (HTML)": "Body (HTML)",
+        "Variant SKU": "Variant SKU",
+        "Variant Price": "Variant Price",
+        "Status": "Status"
+    }
+    
+    vendor_df.rename(columns=column_mapping_vendor, inplace=True)
+    shopify_df.rename(columns=column_mapping_shopify, inplace=True)
     
     # Extract SKU column
-    if "SKU" not in shopify_df.columns or "SKU" not in vendor_df.columns:
-        return None, "Column 'SKU' not found in one of the files."
+    if "Variant SKU" not in shopify_df.columns or "Variant SKU" not in vendor_df.columns:
+        return None, "Column 'Variant SKU' not found in one of the files."
     
-    old_skus = set(shopify_df["SKU"].dropna())
-    new_skus = vendor_df[~vendor_df["SKU"].isin(old_skus)]
+    old_skus = set(shopify_df["Variant SKU"].dropna())
+    new_skus = vendor_df[~vendor_df["Variant SKU"].isin(old_skus)]
     
     # Define new structure based on required export format
-    new_columns = ["SKU", "Product Title", "Description", "Supplier", "Category", "Option Name", "Option Value", "Price", "Product Status"]
+    new_columns = ["Handle", "Title", "Body (HTML)", "Variant SKU", "Variant Price", "Status"]
     
     new_skus = new_skus[new_columns] if all(col in new_skus.columns for col in new_columns) else None
     
