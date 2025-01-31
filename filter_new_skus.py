@@ -15,7 +15,7 @@ if master_file and uploaded_file:
     df_master = pd.read_csv(master_file)
     df_vendor = pd.read_csv(uploaded_file)
 
-    # 🔹 Normalize column names (strip spaces, convert to lowercase)
+    # 🔹 Normalize column names (strip spaces, fix case sensitivity)
     df_master.columns = df_master.columns.str.strip().str.lower()
     df_vendor.columns = df_vendor.columns.str.strip().str.lower()
 
@@ -31,14 +31,14 @@ if master_file and uploaded_file:
         # Keep all rows related to new SKUs
         new_skus_df = df_vendor[df_vendor["variant sku"].isin(new_sku_list)].copy()
 
-        # Create an empty dictionary for handles
+        # Create a dictionary for handles
         handle_map = {}
 
-        # Standardize product names and merge similar listings
+        # Function to generate unique handles
         def generate_handle(name):
             return name.lower().replace(" ", "-").replace("/", "-").replace("&", "and")
 
-        # Grouping similar product names
+        # Group similar product names
         unique_titles = list(new_skus_df["title"].unique())
         grouped_titles = {}
 
@@ -49,24 +49,32 @@ if master_file and uploaded_file:
                 grouped_titles[key_title] = []
             grouped_titles[key_title].append(title)
 
-        # Assigning handles and merging similar listings
+        # Assign handles and merge similar listings
         for base_title, similar_titles in grouped_titles.items():
             handle = generate_handle(base_title)
             for title in similar_titles:
                 handle_map[title] = handle
 
-        # Apply the generated handles
+        # Apply generated handles
         new_skus_df["handle"] = new_skus_df["title"].map(handle_map)
 
-        # Format title to reflect variant nature
-        def format_title(title):
-            return title.split(" ")[0] + " " + " ".join(title.split(" ")[1:3]) + " with different variants"
+        # Format Title (first row contains product title, others are blank)
+        new_skus_df["formatted_title"] = ""
+        first_occurrences = new_skus_df.groupby("handle").head(1).index
+        new_skus_df.loc[first_occurrences, "formatted_title"] = new_skus_df.loc[first_occurrences, "title"]
 
-        new_skus_df["title"] = new_skus_df["title"].map(format_title)
+        # Set blank values for description, vendor, etc. for non-primary rows
+        cols_to_blank = ["body (html)", "vendor", "product category", "tags", "published"]
+        for col in cols_to_blank:
+            if col in new_skus_df.columns:
+                new_skus_df[col] = new_skus_df[col].where(new_skus_df.index.isin(first_occurrences), "")
 
-        # Save the final processed CSV
+        # Rename formatted title back to "Title"
+        new_skus_df.rename(columns={"formatted_title": "title"}, inplace=True)
+
+        # Save the formatted output
         new_skus_file = "new_skus_for_upload.csv"
         new_skus_df.to_csv(new_skus_file, index=False)
 
-        st.success("New SKUs extracted successfully! Handles assigned and similar listings merged.")
+        st.success("New SKUs extracted successfully! Shopify format applied.")
         st.download_button("Download New SKUs CSV", new_skus_df.to_csv(index=False), "new_skus_for_upload.csv", "text/csv")
