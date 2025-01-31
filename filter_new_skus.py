@@ -20,7 +20,7 @@ if master_file and uploaded_file:
     df_vendor.columns = df_vendor.columns.str.strip().str.lower()
 
     # Ensure necessary columns exist
-    required_columns = ["variant sku", "title"]
+    required_columns = ["variant sku", "title", "image src"]
     for col in required_columns:
         if col not in df_vendor.columns:
             st.error(f"Error: The Vendor CSV must contain a '{col}' column. Please check your CSV format.")
@@ -50,6 +50,9 @@ if master_file and uploaded_file:
     first_occurrences = new_skus_df.groupby("handle").head(1).index
     new_skus_df.loc[~new_skus_df.index.isin(first_occurrences), ["title", "body (html)", "vendor", "product category", "tags", "published"]] = ""
 
+    # Assign Image Position based on Handle
+    new_skus_df["image position"] = new_skus_df.groupby("handle").cumcount() + 1
+    
     # Reorder columns to match Shopify's format
     shopify_columns = [
         "Handle", "Title", "Body (HTML)", "Vendor", "Product Category", "Type", "Tags", "Published", 
@@ -68,5 +71,5 @@ if master_file and uploaded_file:
     new_skus_file = "new_skus_for_upload.csv"
     new_skus_df.to_csv(new_skus_file, index=False)
 
-    st.success("New SKUs extracted successfully! Shopify format applied.")
+    st.success("New SKUs extracted successfully! Shopify format applied with proper image handling.")
     st.download_button("Download New SKUs CSV", new_skus_df.to_csv(index=False), "new_skus_for_upload.csv", "text/csv")
