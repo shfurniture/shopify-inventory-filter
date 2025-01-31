@@ -14,19 +14,24 @@ if master_file and uploaded_file:
     df_master = pd.read_csv(master_file)
     df_vendor = pd.read_csv(uploaded_file)
 
-    if "Variant SKU" not in df_vendor.columns or "Variant SKU" not in df_master.columns:
-        st.error("CSV files must contain a 'Variant SKU' column.")
+    # 🔹 Normalize column names (remove spaces, fix case sensitivity)
+    df_master.columns = df_master.columns.str.strip().str.lower()
+    df_vendor.columns = df_vendor.columns.str.strip().str.lower()
+
+    # 🔹 Ensure "handle" column exists
+    if "handle" not in df_vendor.columns or "handle" not in df_master.columns:
+        st.error("Error: The uploaded files must contain a 'Handle' column. Please check your CSV format.")
     else:
-        # 🔹 Identify SKUs that are NOT in the master inventory
-        new_sku_list = df_vendor.loc[~df_vendor["Variant SKU"].isin(df_master["Variant SKU"]), "Variant SKU"].unique()
+        # Identify new SKUs that are NOT in the master inventory
+        new_sku_list = df_vendor.loc[~df_vendor["variant sku"].isin(df_master["variant sku"]), "variant sku"].unique()
 
-        # 🔹 Keep ALL rows related to the new SKUs (ensures images stay grouped)
-        new_skus_df = df_vendor[df_vendor["Variant SKU"].isin(new_sku_list)]
+        # Keep all rows related to new SKUs (ensures all images stay grouped)
+        new_skus_df = df_vendor[df_vendor["variant sku"].isin(new_sku_list)]
 
-        # 🔹 Preserve ALL columns from the original vendor file
-        new_skus_df = df_vendor[df_vendor["Handle"].isin(new_skus_df["Handle"])]
+        # Ensure all handles associated with new SKUs are included
+        new_skus_df = df_vendor[df_vendor["handle"].isin(new_skus_df["handle"])]
 
-        # 🔹 Save and allow download
+        # Save and allow download
         new_skus_file = "new_skus_for_upload.csv"
         new_skus_df.to_csv(new_skus_file, index=False)
 
