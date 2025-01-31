@@ -2,12 +2,13 @@ import streamlit as st
 import pandas as pd
 
 # Function to load and compare SKUs
-def process_sku_file(uploaded_file, previous_file):
-    if uploaded_file is None:
-        return None, "Please upload a file."
+def process_sku_file(shopify_file, vendor_file):
+    if shopify_file is None or vendor_file is None:
+        return None, "Please upload both files."
     
-    # Read uploaded file
-    df = pd.read_csv(uploaded_file)
+    # Read uploaded files
+    shopify_df = pd.read_csv(shopify_file)
+    vendor_df = pd.read_csv(vendor_file)
     
     # Standardize column names
     column_mapping = {
@@ -21,22 +22,15 @@ def process_sku_file(uploaded_file, previous_file):
         "Variant Price": "Price",
         "Status": "Product Status"
     }
-    df.rename(columns=column_mapping, inplace=True)
+    shopify_df.rename(columns=column_mapping, inplace=True)
+    vendor_df.rename(columns=column_mapping, inplace=True)
     
     # Extract SKU column
-    if "SKU" not in df.columns:
-        return None, "Column 'SKU' not found in uploaded file."
+    if "SKU" not in shopify_df.columns or "SKU" not in vendor_df.columns:
+        return None, "Column 'SKU' not found in one of the files."
     
-    new_skus = df[["SKU"]].dropna()
-    
-    # If a previous file exists, filter out existing SKUs
-    if previous_file is not None:
-        prev_df = pd.read_csv(previous_file)
-        if "SKU" in prev_df.columns:
-            old_skus = set(prev_df["SKU"].dropna())
-            new_skus = df[~df["SKU"].isin(old_skus)]
-    else:
-        new_skus = df
+    old_skus = set(shopify_df["SKU"].dropna())
+    new_skus = vendor_df[~vendor_df["SKU"].isin(old_skus)]
     
     # Define new structure based on required export format
     new_columns = ["SKU", "Product Title", "Description", "Supplier", "Category", "Option Name", "Option Value", "Price", "Product Status"]
@@ -48,11 +42,14 @@ def process_sku_file(uploaded_file, previous_file):
 # Streamlit UI
 st.title("Shopify SKU Filter and Export")
 
-uploaded_file = st.file_uploader("Upload Shopify Product CSV", type=["csv"])
-previous_file = st.file_uploader("Upload Previous Inventory CSV (Optional)", type=["csv"])
+st.header("Upload Current Shopify Listings")
+shopify_file = st.file_uploader("Upload the CSV file containing current Shopify product listings", type=["csv"])
 
-if uploaded_file:
-    filtered_data, message = process_sku_file(uploaded_file, previous_file)
+st.header("Upload New Inventory from Vendor")
+vendor_file = st.file_uploader("Upload the CSV file containing the new inventory received from the vendor", type=["csv"])
+
+if shopify_file and vendor_file:
+    filtered_data, message = process_sku_file(shopify_file, vendor_file)
     st.write(message)
     
     if filtered_data is not None:
